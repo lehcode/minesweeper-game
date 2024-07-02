@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { BehaviorSubject } from 'rxjs'
 
-const BOARD_SIZE = 12
+const BOARD_SIZE = 8
 const MINE_COUNT = 10
 
 interface Cell {
@@ -75,7 +75,7 @@ const getAdjacentIndices = (idx: number): number[] => {
   return indices
 }
 
-const revealCell = (idx: number): void => {
+const revealCell = (idx: number) => {
   if (gameStatus.value !== 'playing' || board.value[idx].isRevealed || board.value[idx].isFlagged) {
     return
   }
@@ -86,8 +86,8 @@ const revealCell = (idx: number): void => {
   if (newBoard[idx].isBoom) {
     gameStatus.value = 'lost'
     revealAllMines(newBoard)
-  } else if (newBoard[idx].adjacentMinesAmt === 0) {
-    revealAdjacentCells(newBoard, idx)
+  } else {
+    autoReveal(newBoard, idx)
   }
 
   if (checkWinCondition(newBoard)) {
@@ -96,18 +96,6 @@ const revealCell = (idx: number): void => {
 
   board.value = newBoard
   gameState$.next({ board: newBoard, gameStatus: gameStatus.value })
-}
-
-const revealAdjacentCells = (board: Cell[], idx: number): void => {
-  const adjacentIndices = getAdjacentIndices(idx)
-  adjacentIndices.forEach((i) => {
-    if (!board[i].isRevealed && !board[i].isFlagged) {
-      board[i].isRevealed = true
-      if (board[i].adjacentMinesAmt === 0) {
-        revealAdjacentCells(board, i)
-      }
-    }
-  })
 }
 
 const toggleFlag = (idx: number): void => {
@@ -138,6 +126,12 @@ const resetGame = (): void => {
   initializeBoard()
 }
 
+/**
+ * This code defines a function that determines the CSS class for a cell based on its properties.
+ * If the cell is not revealed, it returns a class based on whether it is flagged or not.
+ * If the cell is a boom cell, it returns a red class.
+ * Otherwise, it returns a default white class.
+ */
 const getCellClass = (cell: Cell): string => {
   if (!cell.isRevealed) {
     return cell.isFlagged ? 'bg-yellow-500' : 'bg-gray-400 hover:bg-gray-500'
@@ -161,6 +155,28 @@ const getCellContent = (cell: Cell): string => {
 onMounted(() => {
   initializeBoard()
 })
+
+/**
+ * This function recursively reveals cells on a game board.
+ * It starts by revealing the current cell and continues revealing adjacent cells with no adjacent mines until no more such cells are found.
+ */
+const autoReveal = (board: Cell[], idx: any) => {
+  const toReveal = [idx]
+
+  while (toReveal.length > 0) {
+    const cIdx = toReveal.pop()
+    board[cIdx].isRevealed = true
+
+    if (board[cIdx].adjacentMinesAmt === 0) {
+      const adjacentIndices = getAdjacentIndices(cIdx)
+      adjacentIndices.forEach((i) => {
+        if (!board[i].isRevealed && !board[i].isFlagged) {
+          toReveal.push(i)
+        }
+      })
+    }
+  }
+}
 </script>
 
 <template>
@@ -172,7 +188,7 @@ onMounted(() => {
         :key="idx"
         @click="revealCell(idx)"
         @contextmenu.prevent="toggleFlag(idx)"
-        class="w-10 h-10 flex items-center justify-center cursor-pointer select-none"
+        class="w-10 h-10 flex items-center cursor-pointer select-none"
         :class="getCellClass(cell)"
       >
         {{ getCellContent(cell) }}
